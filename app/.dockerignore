@@ -1,0 +1,8 @@
+data/
+__pycache__/
+*.pyc
+*.json
+.env*
+.devicecode_*
+*.log
+*.png

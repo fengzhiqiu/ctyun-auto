@@ -70,7 +70,7 @@ read -e -p "账号 (APP_USER): " APP_USER
     exit 1
 }
 
-read -e -p "密码 (APP_PASSWORD): " APP_PASSWORD
+read -r -s -p "密码 (APP_PASSWORD): " APP_PASSWORD
 echo ""
 [ -z "$APP_PASSWORD" ] && {
     echo -e "${RED}[!] 密码不能为空。${NC}"

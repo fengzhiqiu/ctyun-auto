@@ -1,0 +1,25 @@
+# Paste into Container Station 3 > Applications > Create.
+# Replace the two credentials and the host data path before creating.
+# For a literal $ in this YAML use $$ (Compose interpolation).
+services:
+  ctyun:
+    image: ghcr.io/fengzhiqiu/ctyun-auto:latest
+    container_name: ctyun-auto
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    stop_grace_period: 30s
+    environment:
+      APP_USER: "your_phone_number"
+      APP_PASSWORD: "replace_with_your_password"
+      TZ: "Asia/Shanghai"
+      LOGIN_CRON: "0 3,20 * * *"
+      PC_CRON: "0 4,6 * * *"
+    volumes:
+      - /share/Container/ctyun-auto/data:/app/data
+    shm_size: "512m"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

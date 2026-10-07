@@ -11,3 +11,11 @@ __pycache__/
 # 忽略其他
 .devicecode_*
 ctyun_*.json
+data/
+app/data/
+.env.*
+!.env.example
+redeem_config.json
+accounts.json
+*.log
+*.png

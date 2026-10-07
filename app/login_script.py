@@ -81,6 +81,9 @@ def load_cookies(page: ChromiumPage, file_path: str) -> bool:
 def init_browser_options() -> ChromiumOptions:
     """初始化并配置 Chromium 浏览器的启动参数。"""
     options = ChromiumOptions()
+    options.auto_port()
+    if os.getenv("RUNNING_IN_DOCKER") == "true":
+        options.set_browser_path(os.getenv("CHROME_PATH", "/usr/bin/chromium"))
     options.set_argument("--no-sandbox")
     options.set_argument("--disable-gpu")
     options.set_argument("--disable-dev-shm-usage")

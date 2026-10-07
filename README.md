@@ -1,76 +1,77 @@
-# 天翼云电脑保活并完成每日任务获取积分
+# 天翼云电脑：GitHub Actions 镜像与威联通部署
 
-本项目用于在 Docker 容器中保活云电脑使其长期开机，保活不会中断使用，并自动完成积分任务，每天可获取300积分。
+基于 [bytehola/ctyun-auto](https://github.com/bytehola/ctyun-auto) 改造。保留云电脑保活、AI 对话积分、云电脑挂机积分和可选自动兑换功能。实际积分与登录效果取决于天翼服务端。
 
-## 新版本更新
+本版本由 GitHub Actions 构建 Docker 镜像，NAS 直接拉取镜像，无需在 NAS 安装 Python 或构建 Chromium。
 
-- **自动兑换奖励**
-- **挂机积分任务**
-- **优化海外卡顿**
-- **定时任务优化**
+## 镜像
 
-## 自动兑换奖励
+目标镜像：`ghcr.io/fengzhiqiu/ctyun-auto:latest`。**先确认 Actions 首次构建成功，再拉取镜像。**
 
-- 支持自动兑换奖励。
-- 每天可获取 `300` 积分。
-- 推荐策略：设置每月兑换一次（可使用 `-1` 表示每月最后一天）
+- `main` 提交：构建、离线测试并发布 `latest` 和 `sha-<12位提交号>`。
+- `v1.0.0` 等版本标签：发布对应版本和提交号标签，不覆盖 `latest`。
+- Pull Request：仅构建和测试，不发布。
+- Actions 页面支持手动运行；发布时请选择 `main`。
+- 原生 `linux/amd64`、`linux/arm64` 构建；32 位 ARM 不支持。
+- 使用仓库自带 `GITHUB_TOKEN` 发布，无需配置 Docker Hub 密码或天翼账号 Secrets。
+- GHCR 新镜像默认私有；NAS 需登录，或由仓库所有者将镜像包改为 Public。
 
-## 项目结构
+## 威联通 NAS 安装
+
+请看完整 [威联通部署说明](docs/QNAP.md)，包含 Container Station、SSH 首次短信绑定、更新和故障排查。
+
+SSH 快速流程（在存放 `compose.yaml` 和 `.env` 的目录内执行）：
+
+```sh
+cp .env.example .env
+# 在 NAS 上编辑 .env：填写账号、密码和 HOST_DATA_DIR。
+chmod 600 .env
+docker compose pull
+docker compose run --rm --no-deps ctyun --init
+# 完成短信验证、看到保活启动后按 Ctrl+C 退出初始化。
+docker compose up -d
+docker compose logs -f
+```
+
+账户密码只填写在 NAS 本地 `.env` 或 Container Station 的容器配置中。数据目录映射至 `/app/data`，持久保存设备码、Cookie、登录状态和兑换设置。容器启动会自动生成稳定设备码。无需发布端口。
+
+默认北京时间每天 03:00、20:00 执行 AI 对话任务，04:00、06:00 执行挂机任务；可用 `LOGIN_CRON`、`PC_CRON` 调整。后台任务不会自动开启兑换；启用方式见部署说明。
+
+## 运行与验证
+
+- cron 环境通过受限权限的 JSON 文件传递，密码中的引号、空格和美元符号不会被 shell 解释。
+- 每种积分任务使用独立文件锁，避免同一种任务重复启动；Chromium 使用独立调试端口。
+- 镜像使用 Python 虚拟环境；兑换配置持久化到 `/app/data/redeem_config.json`。
+- `tini` 管理信号与子进程，支持正常停止和首次交互初始化。
+- 默认日志最多保留三个 10 MB 文件；健康检查检测 cron 进程，不代表账号登录或积分任务成功。
+- Actions 发布前在每种架构执行 .NET、OCR 和 Chromium 的离线冒烟检查，不登录天翼。
+
+本地基础验证：
+
+```sh
+python3 -m unittest discover -s tests -v
+python3 -m compileall -q app
+bash -n app/entrypoint.sh deploy.sh deploy_cron.sh
+```
+
+可选本地构建：`docker build -t ctyun-auto:local ./app`，然后在 `.env` 设置 `CTYUN_IMAGE=ctyun-auto:local`。原 `deploy.sh`、`deploy_cron.sh` 保留为本地构建方式；NAS 建议使用预构建镜像。旧的自定义脚本路径不适用于新的 cron 包装器。
+
+## 文件
 
 ```text
-.
-├─ deploy.sh               # 交互式部署脚本（构建镜像、启动容器）
-├─ deploy_cron.sh          # 带 cron 参数的部署脚本（可配置定时任务）
-└─ app/
-   ├─ Dockerfile           # 运行环境构建与 cron 任务配置
-   ├─ entrypoint.sh        # 容器入口：启动 cron + 保活循环运行 CtYun.dll
-   ├─ login_script.py      # AI对话积分任务脚本
-   └─ pc_login.py          # 云电脑挂机任务 + 自动兑换脚本
-```
-## 快速开始
-
-在项目根目录执行：
-
-```bash
-git clone https://github.com/liuzhijie443/ctyun-auto.git
-cd ctyun-auto/
-bash deploy.sh
+.github/workflows/docker.yml  # 双架构构建、验证、发布 GHCR
+compose.yaml                 # SSH/Compose 部署
+.env.example                 # NAS 本地配置模板
+deploy/qnap-compose.yaml     # Container Station 可粘贴模板
+docs/QNAP.md                 # 威联通安装、更新与排错
+app/Dockerfile               # 保活基础镜像 + Python + Chromium + cron
+app/configure_runtime.py     # 设备码、运行环境与 cron 配置
+app/run_job.py               # 任务环境与防重复运行
+app/entrypoint.sh            # 首次绑定与保活进程管理
+app/smoke_test.py            # 无账号离线镜像检查
+tests/test_runtime.py        # cron、密码与持久化测试
 ```
 
-按提示输入：
+## 来源
 
-- `APP_USER`：账号
-- `APP_PASSWORD`：密码
-- 数据目录：容器挂载目录（默认 `~/data`）
-
-脚本会构建镜像 `ctyun-auto-sign:v1` 并启动容器 `ctyun_sign_<APP_USER>`。
-
-## 首次运行说明
-
-- 如日志提示输入短信验证码，直接在当前终端输入并回车。
-- 当日志出现“保活任务启动”后，可按 `Ctrl+P` 再按 `Ctrl+Q` 让容器脱离终端并后台运行。
-- 若误按 `Ctrl+C` 导致退出，可执行 `docker start ctyun_sign_<APP_USER>`。
-
-## 常用命令
-
-```bash
-# 查看实时日志
-docker logs -f ctyun_sign_<APP_USER>
-
-# 停止/启动容器
-docker stop ctyun_sign_<APP_USER>
-docker start ctyun_sign_<APP_USER>
-
-# 自动兑换奖励配置
-docker exec -it ctyun_sign_<APP_USER> python3 /app/pc_login.py --config-redeem
-```
-
-## 来源说明
-
-本项目中使用的保活程序来自 `CtYun` 项目：
-
-- https://github.com/leleji/CtYun
-
-当前仓库通过基础镜像 `su3817807/ctyun:latest` 使用该程序（容器内运行 `dotnet CtYun.dll`），本仓库主要补充了定时执行积分任务的能力和增加了24小时重启保活程序。
-
-验证码识别api方案来自 https://github.com/sml2h3/ddddocr
+保活程序来自 [leleji/CtYun](https://github.com/leleji/CtYun)，沿用其发布的 [su3817807/ctyun:1.1.5](https://hub.docker.com/r/su3817807/ctyun/tags) 基础镜像。验证码识别依赖 [sml2h3/ddddocr](https://github.com/sml2h3/ddddocr)。上游项目的署名与来源保留。

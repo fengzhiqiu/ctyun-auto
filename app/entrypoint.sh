@@ -1,31 +1,32 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+umask 077
 
-DEVICECODE_FILE="/app/data/.devicecode_${APP_USER}"
-RESTART_AT_FILE="/tmp/ctyun_restart_at"
+python /app/configure_runtime.py
+export DEVICECODE
+DEVICECODE=$(python -c 'import json; print(json.load(open("/run/ctyun/environment.json"))["DEVICECODE"])')
 
-if [ -z "$DEVICECODE" ]; then
-    if [ -f "$DEVICECODE_FILE" ]; then
-        export DEVICECODE=$(cat "$DEVICECODE_FILE")
-        echo "[*] 读取到已保存的 DEVICECODE: $DEVICECODE"
-    else
-        export DEVICECODE="web_$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)"
-        echo "$DEVICECODE" > "$DEVICECODE_FILE"
-        echo "[*] 首次启动，已生成并持久化 DEVICECODE: $DEVICECODE"
-    fi
-else
-    echo "[*] 检测到手动传入的 DEVICECODE: $DEVICECODE"
+# Debian cron follows /etc/localtime rather than TZ from an individual job.
+ln -snf "/usr/share/zoneinfo/${TZ:-Asia/Shanghai}" /etc/localtime
+printf '%s\n' "${TZ:-Asia/Shanghai}" > /etc/timezone
+cd /app
+
+if [ "${1:-}" = "--init" ]; then
+    echo "[*] 首次设备绑定模式；完成短信验证并看到保活启动后按 Ctrl+C 退出。"
+    exec dotnet CtYun.dll
+fi
+if [ "$#" -ne 0 ]; then
+    echo "[!] 未知参数。首次设备绑定请使用 --init。"
+    exit 1
 fi
 
-env >> /etc/environment
-
-service cron start
+RESTART_AT_FILE="/tmp/ctyun_restart_at"
+/usr/sbin/cron
 echo "[*] Cron 定时服务已启动。"
+trap 'exit 0' TERM INT
 
 set +e
-
 echo "[*] 启动进程守护模式..."
-
 should_restart_ctyun_now() {
     if [ ! -f "$RESTART_AT_FILE" ]; then
         return 1
@@ -48,10 +49,14 @@ run_ctyun_with_watch() {
     local duration="$1"
     local scheduled_restart=0
 
-    timeout --foreground "$duration" dotnet CtYun.dll &
+    timeout --foreground "$duration" dotnet CtYun.dll <&0 &
     local timeout_pid=$!
 
     while kill -0 "$timeout_pid" 2>/dev/null; do
+        if ! pgrep -x cron >/dev/null; then
+            echo "[!] Cron 服务已退出，停止容器以便重启策略恢复。"
+            exit 1
+        fi
         if should_restart_ctyun_now; then
             echo "[*] 检测到兑换成功后的重启计划已到时，准备重启 CtYun.dll。"
             scheduled_restart=1
@@ -74,6 +79,10 @@ run_ctyun_with_watch() {
 
 # 开启无限循环，接管程序的生命周期
 while true; do
+    if ! pgrep -x cron >/dev/null; then
+        echo "[!] Cron 服务已退出，停止容器以便重启策略恢复。"
+        exit 1
+    fi
     echo "======================================================"
     echo "[*] 启动 CtYun.dll..."
     run_ctyun_with_watch 2m

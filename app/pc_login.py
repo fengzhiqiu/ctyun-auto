@@ -39,6 +39,9 @@ RESTART_AT_FILE = "/tmp/ctyun_restart_at"
 def init_browser_options(running_in_docker: bool) -> ChromiumOptions:
     """初始化 Chromium 启动参数。"""
     options = ChromiumOptions()
+    options.auto_port()
+    if os.getenv("RUNNING_IN_DOCKER") == "true":
+        options.set_browser_path(os.getenv("CHROME_PATH", "/usr/bin/chromium"))
     options.set_argument("--no-sandbox")
     options.set_argument("--disable-gpu")
     options.set_argument("--disable-dev-shm-usage")
@@ -571,9 +574,9 @@ def fetch_current_progress(url: str, headers: Dict[str, str]) -> int:
 
 
 def get_redeem_config_path(running_in_docker: bool) -> str:
-    """兑换配置路径，仅保存容器内。"""
+    """兑换配置保存到持久化数据目录。"""
     if running_in_docker:
-        return "/app/redeem_config.json"
+        return "/app/data/redeem_config.json"
     return "./redeem_config.json"
 
 

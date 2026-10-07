@@ -65,10 +65,12 @@ configure_cron_in_container() {
     docker exec "$container_name" sh -c "test -f '$login_script'"
     docker exec "$container_name" sh -c "test -f '$pc_script'"
 
-    docker exec -i "$container_name" sh -c "cat > /etc/cron.d/ctyun-cron && chmod 0644 /etc/cron.d/ctyun-cron && crontab /etc/cron.d/ctyun-cron" <<EOF
-${login_cron} root /usr/bin/python3 ${login_script} > /proc/1/fd/1 2>&1
-${pc_cron} root /usr/bin/python3 ${pc_script} > /proc/1/fd/1 2>&1
-EOF
+    if [ "$login_script" != "$DEFAULT_LOGIN_SCRIPT" ] || [ "$pc_script" != "$DEFAULT_PC_SCRIPT" ]; then
+        echo "[!] 新镜像只支持内置积分脚本；请使用默认脚本路径。"
+        return 1
+    fi
+    docker exec -e LOGIN_CRON="$login_cron" -e PC_CRON="$pc_cron" \
+        "$container_name" python /app/configure_runtime.py
 
     echo -e "${GREEN}[*] Cron 更新成功。${NC}"
     echo -e "    云电脑挂机任务: ${pc_cron}"
