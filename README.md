@@ -41,7 +41,7 @@ docker compose logs -f
 
 - cron 环境通过受限权限的 JSON 文件传递，密码中的引号、空格和美元符号不会被 shell 解释。
 - 每种积分任务使用独立文件锁，避免同一种任务重复启动；Chromium 使用独立调试端口。
-- 镜像使用 Python 虚拟环境；兑换配置持久化到 `/app/data/redeem_config.json`。
+- 镜像使用 Python 虚拟环境；兑换配置持久化到 `/app/data/redeem_config.json`。兑换后默认不重启保活程序，可在兑换配置中开启 `restartAfterRedeem`，详见部署说明。
 - `tini` 管理信号与子进程，支持正常停止和首次交互初始化。
 - 默认日志最多保留三个 10 MB 文件；健康检查检测 cron 进程，不代表账号登录或积分任务成功。
 - Actions 发布前在每种架构执行 .NET、OCR 和 Chromium 的离线冒烟检查，不登录天翼。

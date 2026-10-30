@@ -140,6 +140,8 @@ docker exec -it ctyun-auto python /app/run_job.py pc --config-redeem
 
 按提示选择是否启用、奖励和兑换日期；可选每月最后一天。配置保存到 `data/redeem_config.json`。配置时若挂机任务正在运行，文件锁会阻止重复启动，等任务结束再配置。
 
+兑换成功后默认不重启保活程序。交互配置中选择“兑换成功后是否重启保活程序 CtYun.dll?”为 `y`，可恢复兑换成功后约 2 分钟重启保活程序的行为。也可在没有挂机任务运行时，先备份 `data/redeem_config.json`，再将其中的 `"restartAfterRedeem"` 设为 JSON 布尔值 `true`（开启）或 `false`（关闭）；旧配置缺少此字段时默认关闭，无需重新配置。此开关只控制兑换后的保活程序重启，不改变原有定时重启逻辑，也不控制天翼服务端的资源变更行为。
+
 如果迁移旧容器，它的兑换配置可能在未挂载的 `/app/redeem_config.json`；**删除旧容器前**用 `docker cp 旧容器名:/app/redeem_config.json /实际数据目录/redeem_config.json` 复制，再备份原数据目录。
 
 ## 7. 更新、回退和备份

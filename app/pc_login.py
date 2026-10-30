@@ -858,6 +858,13 @@ def prompt_and_create_redeem_config(
     )
     schedule_config = prompt_redeem_schedule()
 
+    while True:
+        restart_input = input("兑换成功后是否重启保活程序 CtYun.dll? [y/N]: ").strip().lower()
+        if restart_input in ("", "n", "no", "y", "yes"):
+            restart_after_redeem = restart_input in ("y", "yes")
+            break
+        print("[-] 请输入 y 或 n。")
+
     config = {
         "enabled": True,
         "desktopId": str(desktop.get("desktopId", "")).strip(),
@@ -867,6 +874,7 @@ def prompt_and_create_redeem_config(
         "costPoints": int(reward["costPoints"]),
         "maxRedeemTimes": int(max_redeem_times),
         "lastRedeemDate": "",
+        "restartAfterRedeem": restart_after_redeem,
     }
     config.update(schedule_config)
     save_redeem_config(get_redeem_config_path(running_in_docker), config)
@@ -1003,13 +1011,15 @@ def auto_redeem_reward_after_hang(
         if try_redeem_reward_once(headers, payload, attempt_times, cost_points):
             config["lastRedeemDate"] = today.isoformat()
             save_redeem_config(config_path, config)
-            if running_in_docker:
+            if running_in_docker and config.get("restartAfterRedeem") is True:
                 try:
                     with open(RESTART_AT_FILE, "w", encoding="utf-8") as f:
                         f.write(str(restart_at))
                     print("[*] 已设置 CtYun.dll 在 2 分钟后自动重启。")
                 except Exception as e:
                     print(f"[!] 写入重启计划失败: {e}")
+            elif running_in_docker:
+                print("[*] 兑换已完成，未启用兑换后重启，保活程序继续运行。")
             return
         attempt_times -= 1
 
